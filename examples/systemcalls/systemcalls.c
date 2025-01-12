@@ -1,3 +1,10 @@
+#include <stdlib.h>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <sys/wait.h>
+
 #include "systemcalls.h"
 
 /**
@@ -16,6 +23,10 @@ bool do_system(const char *cmd)
  *   and return a boolean true if the system() call completed with success
  *   or false() if it returned a failure
 */
+    if (system(cmd) != 0)
+    {
+        return false;
+    }
 
     return true;
 }
@@ -38,16 +49,18 @@ bool do_exec(int count, ...)
 {
     va_list args;
     va_start(args, count);
-    char * command[count+1];
+    char * command[count + 1];
     int i;
-    for(i=0; i<count; i++)
+    for(i = 0; i < count; i++)
     {
         command[i] = va_arg(args, char *);
     }
     command[count] = NULL;
     // this line is to avoid a compile warning before your implementation is complete
     // and may be removed
-    command[count] = command[count];
+    //command[count] = command[count];
+
+    va_end(args);
 
 /*
  * TODO:
@@ -58,8 +71,63 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
+    if (command[0] == NULL)
+    {
+        return false;
+    }
 
-    va_end(args);
+    fflush(stdout);
+
+    int status;
+    pid_t pid;
+
+    pid = fork();
+    if (pid == -1)
+    {
+        printf("fork failed\r\n");
+        return false;
+    }
+    else if (pid == 0)
+    {
+        printf("************************************child process\r\n");
+
+        for (i = 0; i < count + 1; i++)
+        {
+            printf("command[%d]: %s\r\n", i, command[i]);
+        }
+
+        if (execv(command[0], command) == -1)
+        {
+            printf("************************************execv failed\r\n");
+            exit(EXIT_FAILURE);
+        }
+        else
+        {
+            printf("************************************execv success\r\n");
+            exit(EXIT_SUCCESS);
+        }
+    }
+    else
+    {
+        printf("************************************parent process\r\n");
+
+        if (waitpid(pid, &status, 0) == -1)
+        {
+            printf("************************************waitpid failed\r\n");
+            return false;
+        }
+        
+        if (WIFEXITED(status))
+        {
+            printf("************************************WIFEXITED %d\r\n", WEXITSTATUS(status));
+            return (WEXITSTATUS(status) == 0);
+        }
+        else
+        {
+            printf("************************************WIFEXITED failed %d\r\n", WEXITSTATUS(status));
+            return false;
+        }
+    }
 
     return true;
 }
@@ -84,6 +152,7 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     // and may be removed
     command[count] = command[count];
 
+    va_end(args);
 
 /*
  * TODO
@@ -93,7 +162,41 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
  *
 */
 
-    va_end(args);
+    fflush(stdout);
+
+    int status;
+    pid_t pid;
+    int fd = open(outputfile, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd == -1)
+    {
+        return false;
+    }
+    switch (pid = fork())
+    {
+    case -1:
+        return false;
+        break;
+    case 0:
+        if (dup2(fd, STDOUT_FILENO) < 0)    // redirect stdout to file
+        {
+            return false;
+        }
+        close(fd);
+        execv(command[0], command);
+        exit(-1);
+        break;
+    
+    default:
+        if (waitpid(pid, &status, 0) == -1)
+        {
+            return false;
+        }
+        else if ((WIFEXITED(status) == 0) && (WEXITSTATUS(status) == 0))
+        {
+            return false;
+        }
+        break;
+    }
 
     return true;
 }
