@@ -1,10 +1,10 @@
-#!/bin/bash
+#!/bin/sh
 
-if [[ $# -ne 2 ]]; then
+if [ $# -ne 2 ]; then
     echo "parameter fault $#"
     exit 1
 fi
-if [[ ! -d $1 ]]; then
+if [ ! -d $1 ]; then
     echo "'$1' does not exist"
     exit 1
 fi
