@@ -1,4 +1,6 @@
 
+CROSS_COMPILE=aarch64-none-linux-gnu-
+
 TARGET := writer
 
 ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
