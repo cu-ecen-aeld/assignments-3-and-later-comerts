@@ -1,5 +1,5 @@
 
-#CROSS_COMPILE=aarch64-none-linux-gnu-
+CROSS_COMPILE=aarch64-none-linux-gnu-
 
 TARGET := aesdsocket
 
