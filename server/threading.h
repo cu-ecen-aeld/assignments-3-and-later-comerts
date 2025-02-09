@@ -20,15 +20,14 @@ struct thread_data
      * your thread implementation.
      */
     pthread_mutex_t *mutex;
+    int *sockfd;
+    FILE *filefd;
 
     /**
      * Set to true if the thread completed with success, false
      * if an error occurred.
      */
     bool thread_complete_success;
-
-    int *sockfd;
-    FILE *filefd;
 };
 
 typedef struct thread_data thread_data_t;

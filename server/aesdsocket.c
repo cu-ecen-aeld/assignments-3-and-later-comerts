@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <sys/queue.h>
+#include <time.h>
 
 //#include "queue.h"
 #include "threading.h"
@@ -24,15 +25,20 @@
 //#define DEBUG_LOG(msg,...) printf("threading: " msg "\r\n" , ##__VA_ARGS__)
 #define ERROR_LOG(msg,...) printf("threading ERROR: " msg "\r\n" , ##__VA_ARGS__)
 
+#define TIMER_INTERVAL_SEC (10U)
+
 static struct sockaddr_in cli_addr;
 static const char *SOCK_FILE = "/var/tmp/aesdsocketdata";
 static const int PORT_NO = 9000;
 
 static FILE *file;
+static pthread_mutex_t fileMutex;
 static int sockfd;
+static timer_t timerid;
 
 static void daemonize(void);
 static void sig_handler(int signo);
+static void timer_handler(FILE *file);
 
 int main(int argc, char *argv[])
 {
@@ -65,6 +71,8 @@ int main(int argc, char *argv[])
 
 	struct sigaction new_action = {0};
 	struct sigaction old_action = {0};
+    struct sigevent sev = {0};
+    struct itimerspec its = {0};
 
 	/* Set up the structure to specify the new action. */
 	new_action.sa_handler = sig_handler;
@@ -76,11 +84,46 @@ int main(int argc, char *argv[])
 	{
         sigaction(SIGINT, &new_action, NULL);
 	}
-	sigaction(SIGTERM, NULL, &old_action);
+
+    sigaction(SIGTERM, NULL, &old_action);
 	if (old_action.sa_handler != SIG_IGN)
 	{
         sigaction(SIGTERM, &new_action, NULL);
 	}
+
+    sigaction(SIGUSR1, NULL, &old_action);
+    if (old_action.sa_handler != SIG_IGN)
+    {
+        sigaction(SIGUSR1, &new_action, NULL);
+    }
+
+    if (pthread_mutex_init(&fileMutex, NULL) != 0)
+    {
+        perror("pthread_mutex_init");
+        syslog(LOG_ERR, "pthread_mutex_init: %m");
+        exit(EXIT_FAILURE);
+    }
+
+    // Set up timer
+    sev.sigev_notify = SIGEV_SIGNAL;
+    sev.sigev_signo = SIGUSR1;
+    sev.sigev_value.sival_ptr = &timerid;
+    if (timer_create(CLOCK_REALTIME, &sev, &timerid) == -1)
+    {
+        perror("timer_create");
+        exit(EXIT_FAILURE);
+    }
+
+    // Start timer
+    its.it_value.tv_sec = TIMER_INTERVAL_SEC;
+    its.it_value.tv_nsec = 0;
+    its.it_interval.tv_sec = TIMER_INTERVAL_SEC;
+    its.it_interval.tv_nsec = 0;
+    if (timer_settime(timerid, 0, &its, NULL) == -1)
+    {
+        perror("timer_settime");
+        exit(EXIT_FAILURE);
+    }
 
     openlog("aesdsocket", LOG_PID | LOG_CONS, LOG_USER);
 
@@ -97,7 +140,7 @@ int main(int argc, char *argv[])
     if (sockfd < 0)
     {
         perror("ERROR opening socket");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     // Set socket options to reuse the address
@@ -109,7 +152,7 @@ int main(int argc, char *argv[])
         close(sockfd);
         fclose(file);
         closelog();
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     bzero((char *)&serv_addr, sizeof(serv_addr));
@@ -124,7 +167,7 @@ int main(int argc, char *argv[])
         close(sockfd);
         fclose(file);
         closelog();
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     listen(sockfd, 5);
@@ -135,16 +178,29 @@ int main(int argc, char *argv[])
     while (1)
     {   
         int *clientsockfd = malloc(sizeof(int));
-        *clientsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
-        
-        if (*clientsockfd < 0)
+        if (clientsockfd == NULL)
         {
-            perror("ERROR on accept");
-            syslog(LOG_ERR, "ERROR on accept: %m");
-            close(sockfd);
-            fclose(file);
-            closelog();
-            exit(1);
+            perror("malloc");
+            syslog(LOG_ERR, "malloc: %m");
+            continue;
+        }
+
+        while ((*clientsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen)) < 0)
+        {
+            if (errno == EINTR)
+            {
+                continue; // Retry if interrupted by signal
+            }
+            else
+            {
+                perror("ERROR on accept");
+                syslog(LOG_ERR, "ERROR on accept: %m");
+                free(clientsockfd);
+                close(sockfd);
+                fclose(file);
+                closelog();
+                exit(EXIT_FAILURE);
+            }
         }
 
         printf("Accepted connection from %s\r\n", inet_ntoa(cli_addr.sin_addr));
@@ -162,16 +218,7 @@ int main(int argc, char *argv[])
             free(clientsockfd);
             continue;
         }
-        pthread_mutex_t *sockMutex = malloc(sizeof(pthread_mutex_t));
-        if (sockMutex == NULL)
-        {
-            perror("malloc");
-            syslog(LOG_ERR, "malloc: %m");
-            close(*clientsockfd);
-            free(sockThread);
-            continue;
-        }
-
+        
         thread_data_t *threadData = malloc(sizeof(thread_data_t));
         if (threadData == NULL)
         {
@@ -182,17 +229,9 @@ int main(int argc, char *argv[])
         }
 
         threadData->sockfd = clientsockfd;
-        threadData->mutex = sockMutex;
+        threadData->mutex = &fileMutex;
         threadData->filefd = file;
         threadData->thread_complete_success = false;
-
-        if (pthread_mutex_init(sockMutex, NULL) != 0)
-        {
-            perror("pthread_mutex_init");
-            syslog(LOG_ERR, "pthread_mutex_init: %m");
-            close(*clientsockfd);
-            continue;
-        }
 
         insert_thread_data(sockThread, threadData);
 
@@ -243,7 +282,6 @@ int main(int argc, char *argv[])
                     }
 
                     free(thread_data->sockfd);
-                    free(thread_data->mutex);
                     free(thread_data);
                     free(thread);
                 }
@@ -317,19 +355,19 @@ static void daemonize(void)
     {
         perror("daemon");
         syslog(LOG_ERR, "daemon: %m");
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 #endif
 }
 
 static void sig_handler(int signo)
 {
+    printf("Caught signal %d\r\n", signo);
+    syslog(LOG_INFO, "Caught signal %d\r\n", signo);
     switch (signo)
     {
         case SIGINT:
         case SIGTERM:
-            printf("Caught signal %d, exiting\r\n", signo);
-            syslog(LOG_INFO, "Caught signal %d, exiting\r\n", signo);
             fclose(file);
             if (remove(SOCK_FILE) != 0)
             {
@@ -364,7 +402,6 @@ static void sig_handler(int signo)
                     else
                     {
                         free(thread_data->sockfd);
-                        free(thread_data->mutex);
                         free(thread_data);
                         free(thread);
                     }
@@ -377,9 +414,48 @@ static void sig_handler(int signo)
 
             close(sockfd);
             closelog();
-            exit(0);
+            exit(EXIT_SUCCESS);
             break;
+
+        case SIGUSR1:
+            timer_handler(file); 
+            break;
+
         default:
             break;
     }
+}
+
+static void timer_handler(FILE *file)
+{
+    char buf[256];
+    time_t t;
+    struct tm *tmp;
+
+    printf("Timer expired\r\n");
+    syslog(LOG_INFO, "Timer expired\r\n");
+
+    t = time(NULL);
+    tmp = localtime(&t);
+    if (tmp == NULL)
+    {
+        perror("localtime");
+        syslog(LOG_ERR, "localtime: %m");
+        return;
+    }
+
+    if (strftime(buf, sizeof(buf), "%F %R", tmp) == 0)
+    {
+        perror("strftime");
+        syslog(LOG_ERR, "strftime: %m");
+        return;
+    }
+
+    pthread_mutex_lock(&fileMutex);
+
+    fprintf(file, "timestamp:%s\r\n", buf);
+
+    pthread_mutex_unlock(&fileMutex);
+
+    fflush(file);
 }

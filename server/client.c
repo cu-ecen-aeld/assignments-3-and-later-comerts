@@ -13,6 +13,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <pthread.h>
+
 #include "client.h"
 
 int handle_client(int *newsockfd, FILE *file)
