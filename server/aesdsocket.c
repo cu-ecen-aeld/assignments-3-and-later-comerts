@@ -12,7 +12,17 @@
 #include <stdbool.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <pthread.h>
+#include <sys/queue.h>
 
+//#include "queue.h"
+#include "threading.h"
+#include "slist.h"
+#include "client.h"
+
+#define DEBUG_LOG(msg,...)
+//#define DEBUG_LOG(msg,...) printf("threading: " msg "\r\n" , ##__VA_ARGS__)
+#define ERROR_LOG(msg,...) printf("threading ERROR: " msg "\r\n" , ##__VA_ARGS__)
 
 static struct sockaddr_in cli_addr;
 static const char *SOCK_FILE = "/var/tmp/aesdsocketdata";
@@ -20,11 +30,9 @@ static const int PORT_NO = 9000;
 
 static FILE *file;
 static int sockfd;
-static int clientsockfd;
 
 static void daemonize(void);
 static void sig_handler(int signo);
-static int handle_client(int newsockfd, FILE *file);
 
 int main(int argc, char *argv[])
 {
@@ -122,10 +130,14 @@ int main(int argc, char *argv[])
     listen(sockfd, 5);
     clilen = sizeof(cli_addr);
 
+    initialize_list();
+
     while (1)
-    {
-        clientsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
-        if (clientsockfd < 0)
+    {   
+        int *clientsockfd = malloc(sizeof(int));
+        *clientsockfd = accept(sockfd, (struct sockaddr *)&cli_addr, &clilen);
+        
+        if (*clientsockfd < 0)
         {
             perror("ERROR on accept");
             syslog(LOG_ERR, "ERROR on accept: %m");
@@ -138,22 +150,109 @@ int main(int argc, char *argv[])
         printf("Accepted connection from %s\r\n", inet_ntoa(cli_addr.sin_addr));
         syslog(LOG_INFO, "Accepted connection from %s\r\n", inet_ntoa(cli_addr.sin_addr));
 
-        if (0 != handle_client(clientsockfd, file))
+        printf("Creating thread for %s\r\n", inet_ntoa(cli_addr.sin_addr));
+        syslog(LOG_INFO, "Creating thread for %s\r\n", inet_ntoa(cli_addr.sin_addr));
+        
+        pthread_t *sockThread = malloc(sizeof(pthread_t));
+        if (sockThread == NULL)
         {
-            syslog(LOG_ERR, "handle_client: %m");
+            perror("malloc");
+            syslog(LOG_ERR, "malloc: %m");
+            close(*clientsockfd);
+            free(clientsockfd);
+            continue;
+        }
+        pthread_mutex_t *sockMutex = malloc(sizeof(pthread_mutex_t));
+        if (sockMutex == NULL)
+        {
+            perror("malloc");
+            syslog(LOG_ERR, "malloc: %m");
+            close(*clientsockfd);
+            free(sockThread);
+            continue;
         }
 
-        // Shutdown the client socket
-        if (shutdown(clientsockfd, SHUT_RDWR) < 0)
+        thread_data_t *threadData = malloc(sizeof(thread_data_t));
+        if (threadData == NULL)
         {
-            perror("ERROR shutting down client socket");
-            syslog(LOG_ERR, "ERROR shutting down client socket: %m");}
+            perror("malloc");
+            syslog(LOG_ERR, "malloc: %m");
+            close(*clientsockfd);
+            continue;
+        }
 
-        close(clientsockfd);
-        clientsockfd = 0;
+        threadData->sockfd = clientsockfd;
+        threadData->mutex = sockMutex;
+        threadData->filefd = file;
+        threadData->thread_complete_success = false;
 
-        printf("Closed connection from %s\r\n", inet_ntoa(cli_addr.sin_addr));
-        syslog(LOG_INFO, "Closed connection from %s\r\n", inet_ntoa(cli_addr.sin_addr));
+        if (pthread_mutex_init(sockMutex, NULL) != 0)
+        {
+            perror("pthread_mutex_init");
+            syslog(LOG_ERR, "pthread_mutex_init: %m");
+            close(*clientsockfd);
+            continue;
+        }
+
+        insert_thread_data(sockThread, threadData);
+
+        if (start_thread_obtaining_mutex(sockThread, threadData) == false)
+        {
+            perror("start_thread_obtaining_mutex");
+            syslog(LOG_ERR, "start_thread_obtaining_mutex: %m");
+        }
+
+        printf("Thread created for %s\r\n", inet_ntoa(cli_addr.sin_addr));
+        syslog(LOG_INFO, "Thread created for %s\r\n", inet_ntoa(cli_addr.sin_addr));
+        
+        // Wait for the thread to complete
+        printf("Waiting for thread to complete\r\n");
+
+        while (1)
+        {
+            pthread_t *thread = NULL;
+            thread_data_t *thread_data = NULL;
+            check_list(&thread, &thread_data);
+            if (thread != NULL)
+            {
+                // Shutdown the client socket
+                if (shutdown(*thread_data->sockfd, SHUT_RDWR) < 0)
+                {
+                    perror("ERROR shutting down client socket");
+                    syslog(LOG_ERR, "ERROR shutting down client socket: %m");
+                }
+
+                close(*thread_data->sockfd);
+
+                if (pthread_join(*thread, NULL) != 0)
+                {
+                    perror("pthread_join");
+                    syslog(LOG_ERR, "pthread_join: %m");
+                }
+                else
+                {
+                    if (thread_data->thread_complete_success == true)
+                    {
+                        printf("Thread completed successfully\r\n");
+                        syslog(LOG_INFO, "Thread completed successfully\r\n");
+                    }
+                    else
+                    {
+                        printf("Thread failed\r\n");
+                        syslog(LOG_ERR, "Thread failed\r\n");
+                    }
+
+                    free(thread_data->sockfd);
+                    free(thread_data->mutex);
+                    free(thread_data);
+                    free(thread);
+                }
+            }
+            else
+            {
+                break;
+            }
+        }
     }
 
     fclose(file);
@@ -223,105 +322,6 @@ static void daemonize(void)
 #endif
 }
 
-static int handle_client(int newsockfd, FILE *file)
-{
-    int ret = 0;
-    const int BUFSIZE = 256;
-    char *buffer = (char *)malloc(BUFSIZE);
-    bzero(buffer, BUFSIZE);
-    int n = BUFSIZE;
-    int size = BUFSIZE;
-    int xbuf = 0;
-    while (1)
-    {
-        n = read(newsockfd, &buffer[xbuf], BUFSIZE - 1);
-        if (n < 0)
-        {
-            perror("ERROR reading from socket");
-            ret = 1;
-            break;
-        }
-        else
-        {
-            if (n == 0)
-            {
-                break;
-            }
-            else
-            {
-                buffer[xbuf + n] = '\0';
-                if (buffer[xbuf + n - 1] == '\n')
-                {
-                    break;
-                }
-                else
-                {
-                    //printf("n: %d\r\n", n);
-                    //printf("Received: %s\r\n", &buffer[xbuf]);
-                    xbuf += n;
-                    size += n;
-                    //printf("buffer: %s\r\n", buffer);
-                    //printf("Size: %d\r\n", size);
-                    char *temp = realloc(buffer, size);
-                    if (temp == NULL)
-                    {
-                        perror("realloc");
-                        ret = 1;
-                        break;
-                    }
-                    buffer = temp;
-                }
-            }
-        }
-    }
-
-    printf("Here is the message: %s\r\n", buffer);
-    if (-1 == (int)fwrite(buffer, 1, strlen(buffer), file))
-    {
-        perror("write");
-        ret = 1;
-    }
-    fflush(file);
-    
-    int fileSize = ftell(file);
-    if (fileSize < 0)
-    {
-        perror("ftell");
-        ret = 1;
-    }
-    printf("File size: %d\r\n", fileSize);
-
-    if (fseek(file, 0, SEEK_SET) != 0)
-    {
-        perror("fseek");
-        ret = 1;
-    }
-
-    char *fileBuffer = (char *)malloc(fileSize);
-    if (fileBuffer == NULL)
-    {
-        perror("malloc");
-        ret = 1;
-    }
-
-    if ((int)fread(fileBuffer, 1, fileSize, file) != fileSize)
-    {
-        perror("fread");
-        ret = 1;
-    }
-
-    if (write(newsockfd, fileBuffer, fileSize) < 0)
-    {
-        perror("ERROR writing to socket");
-        ret = 1;
-    }
-    
-    free(buffer);
-    free(fileBuffer);    
-
-    return ret;
-}
-
 static void sig_handler(int signo)
 {
     switch (signo)
@@ -337,16 +337,44 @@ static void sig_handler(int signo)
                 syslog(LOG_ERR, "remove: %m");
             }
 
-            if (clientsockfd > 0)
+            while (1)
             {
-                // Shutdown the client socket
-                if (shutdown(clientsockfd, SHUT_RDWR) < 0)
+                pthread_t *thread = NULL;
+                thread_data_t *thread_data = NULL;
+                free_list(&thread, &thread_data);
+                if (thread != NULL)
                 {
-                    perror("ERROR shutting down client socket");
-                    syslog(LOG_ERR, "ERROR shutting down client socket: %m");
+                    if (*thread_data->sockfd > 0)
+                    {
+                        // Shutdown the client socket
+                        if (shutdown(*thread_data->sockfd, SHUT_RDWR) < 0)
+                        {
+                            perror("ERROR shutting down client socket");
+                            syslog(LOG_ERR, "ERROR shutting down client socket: %m");
+                        }
+
+                        close(*thread_data->sockfd);
+                    }
+
+                    if (pthread_join(*thread, NULL) != 0)
+                    {
+                        perror("pthread_join");
+                        syslog(LOG_ERR, "pthread_join: %m");
+                    }
+                    else
+                    {
+                        free(thread_data->sockfd);
+                        free(thread_data->mutex);
+                        free(thread_data);
+                        free(thread);
+                    }
                 }
-                close(clientsockfd);
+                else
+                {
+                    break;
+                }
             }
+
             close(sockfd);
             closelog();
             exit(0);

@@ -9,10 +9,13 @@ CFLAGS := -ggdb -Werror -Wall -Wextra -Wno-format-truncation -lpthread -lrt
 
 CFLAGS += -I$(ROOT_DIR)/include
 
-SOURCES := aesdsocket.c
+SOURCES := aesdsocket.c threading.c slist.c client.c
 
 all:
 	$(CROSS_COMPILE)gcc $(CFLAGS) $(SOURCES) -o $(TARGET)
+
+pc:
+	gcc $(CFLAGS) $(SOURCES) -o $(TARGET)
 
 clean:
 	rm -rf *.o $(TARGET)
