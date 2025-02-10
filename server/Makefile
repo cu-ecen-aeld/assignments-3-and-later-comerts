@@ -1,21 +1,25 @@
 
 #CROSS_COMPILE=aarch64-none-linux-gnu-
 
-TARGET := aesdsocket
+CC ?= $(CROSS_COMPILE)gcc
+
+TARGET ?= aesdsocket
 
 ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 
-CFLAGS := -ggdb -Werror -Wall -Wextra -Wno-format-truncation -lpthread -lrt
+CFLAGS ?= -ggdb -Werror -Wall -Wextra -Wno-format-truncation
 
-CFLAGS += -I$(ROOT_DIR)/include
+INCLUDES ?= -I$(ROOT_DIR)/include
+
+LDFLAGS ?=  -lpthread -lrt
 
 SOURCES := aesdsocket.c threading.c slist.c client.c
 
 all:
-	$(CROSS_COMPILE)gcc $(CFLAGS) $(SOURCES) -o $(TARGET)
+	$(CC) $(CFLAGS) $(LDFLAGS) $(INCLUDES) $(SOURCES) -o $(TARGET)
 
 pc:
-	gcc $(CFLAGS) $(SOURCES) -o $(TARGET)
+	gcc $(CFLAGS) $(LDFLAGS) $(INCLUDES) $(SOURCES) -o $(TARGET)
 
 clean:
 	rm -rf *.o $(TARGET)
