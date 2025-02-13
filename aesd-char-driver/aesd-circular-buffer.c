@@ -14,14 +14,20 @@
 #include <string.h>
 #include <stdio.h>
 #include <syslog.h>
-#endif
+#endif // __KERNEL__
 
 #include "aesd-circular-buffer.h"
 
 // Optional: use these functions to add debug or error prints to your application
 #define DEBUG_LOG(msg,...)
+#ifdef __KERNEL__
+//#define DEBUG_LOG(msg,...) printk(KERN_DEBUG "threading: " msg "\n" , ##__VA_ARGS__)
+#define ERROR_LOG(msg,...) printk(KERN_ERR "threading ERROR: " msg "\n" , ##__VA_ARGS__)
+#else
+#define DEBUG_LOG(msg,...)
 //#define DEBUG_LOG(msg,...) printf("threading: " msg "\n" , ##__VA_ARGS__)
 #define ERROR_LOG(msg,...) printf("threading ERROR: " msg "\n" , ##__VA_ARGS__)
+#endif // __KERNEL__
 
 /**
  * @param buffer the buffer to search for corresponding offset.  Any necessary locking must be performed by caller.
@@ -43,23 +49,19 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
     struct aesd_buffer_entry *entry = NULL;
     size_t total_size = 0;
     
-#ifndef __KERNEL__
     DEBUG_LOG("Searching for entry at offset: %zu\r\n", char_offset);
     syslog(LOG_INFO, "Searching for entry at offset: %zu", char_offset);
     DEBUG_LOG("Buffer out offs: %d, Buffer in offs: %d\r\n", buffer->out_offs, buffer->in_offs);
     syslog(LOG_INFO, "Buffer out offs: %d, Buffer in offs: %d", buffer->out_offs, buffer->in_offs);
     DEBUG_LOG("Buffer full: %d\r\n", buffer->full);
     syslog(LOG_INFO, "Buffer full: %d", buffer->full);
-#endif // __KERNEL__
 
     bool buffer_empty = (buffer->in_offs == buffer->out_offs) && (buffer->full == false);
 
     if (buffer_empty)
     {
-#ifndef __KERNEL__
         DEBUG_LOG("Buffer is empty\r\n");
         syslog(LOG_INFO, "Buffer is empty");
-#endif // __KERNEL__
         return NULL;
     }
 
@@ -68,10 +70,8 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
     {
         total_size += buffer->entry[i].size;
 
-#ifndef __KERNEL__
         DEBUG_LOG("Total size: %zu\r\n", total_size);
         syslog(LOG_INFO, "Total size: %zu", total_size);
-#endif // __KERNEL__
 
         if(total_size > char_offset)
         {
@@ -102,28 +102,23 @@ void aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const s
     if (buffer->full)
     {
         buffer->out_offs = (buffer->out_offs + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
-#ifndef __KERNEL__
+
         DEBUG_LOG("Buffer is full, overwriting oldest entry\r\n");
         syslog(LOG_INFO, "Buffer is full, overwriting oldest entry");
-#endif // __KERNEL__
     }
 
     buffer->entry[buffer->in_offs] = *add_entry;
     buffer->in_offs = (buffer->in_offs + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
     
-#ifndef __KERNEL__
     DEBUG_LOG("Added entry to buffer: %s\r\n", add_entry->buffptr);
     syslog(LOG_INFO, "Added entry to buffer: %s", add_entry->buffptr);
-#endif // __KERNEL__
 
     if (buffer->in_offs == buffer->out_offs)
     {
         buffer->full = true;
 
-#ifndef __KERNEL__
         DEBUG_LOG("Buffer is full\r\n");
         syslog(LOG_INFO, "Buffer is full");
-#endif // __KERNEL__
     }
 }
 
