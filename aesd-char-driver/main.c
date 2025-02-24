@@ -41,8 +41,6 @@ int aesd_open(struct inode *inode, struct file *filp)
     /**
      * TODO: handle open
      */
-
-    PDEBUG("open");
     
     struct aesd_dev *dev;
     
@@ -169,8 +167,12 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff
 
     if (mutex_lock_interruptible(&dev->lock))
     {
+        PDEBUG("mutex_lock_interruptible failed");
         return -ERESTARTSYS;
     }
+
+    PDEBUG("write_buffer_index: %d", write_buffer_index);
+    PDEBUG("write_buffer: %s", write_buffer[write_buffer_index]);
 
     if (count >= AESDCHAR_MAX_WRITE_SIZE)
     {

@@ -27,6 +27,8 @@
 
 #define TIMER_INTERVAL_SEC (10U)
 
+#define USE_AESD_CHAR_DEVICE    (1) // Set to 1 to use AESD char device, 0 to use file
+
 static struct sockaddr_in cli_addr;
 static const char *SOCK_FILE = "/var/tmp/aesdsocketdata";
 static const int PORT_NO = 9000;
@@ -34,11 +36,15 @@ static const int PORT_NO = 9000;
 static FILE *file;
 static pthread_mutex_t fileMutex;
 static int sockfd;
+#ifndef USE_AESD_CHAR_DEVICE
 static timer_t timerid;
+#endif // USE_AESD_CHAR_DEVICE
 
 static void daemonize(void);
 static void sig_handler(int signo);
+#ifndef USE_AESD_CHAR_DEVICE
 static void timer_handler(FILE *file);
+#endif // USE_AESD_CHAR_DEVICE
 
 int main(int argc, char *argv[])
 {
@@ -71,8 +77,10 @@ int main(int argc, char *argv[])
 
 	struct sigaction new_action = {0};
 	struct sigaction old_action = {0};
+#ifndef USE_AESD_CHAR_DEVICE
     struct sigevent sev = {0};
     struct itimerspec its = {0};
+#endif //USE_AESD_CHAR_DEVICE
 
 	/* Set up the structure to specify the new action. */
 	new_action.sa_handler = sig_handler;
@@ -91,11 +99,13 @@ int main(int argc, char *argv[])
         sigaction(SIGTERM, &new_action, NULL);
 	}
 
+#ifndef USE_AESD_CHAR_DEVICE
     sigaction(SIGUSR1, NULL, &old_action);
     if (old_action.sa_handler != SIG_IGN)
     {
         sigaction(SIGUSR1, &new_action, NULL);
     }
+#endif //USE_AESD_CHAR_DEVICE
 
     if (pthread_mutex_init(&fileMutex, NULL) != 0)
     {
@@ -104,6 +114,7 @@ int main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 
+#ifndef USE_AESD_CHAR_DEVICE
     // Set up timer
     sev.sigev_notify = SIGEV_SIGNAL;
     sev.sigev_signo = SIGUSR1;
@@ -124,6 +135,7 @@ int main(int argc, char *argv[])
         perror("timer_settime");
         exit(EXIT_FAILURE);
     }
+#endif // USE_AESD_CHAR_DEVICE
 
     openlog("aesdsocket", LOG_PID | LOG_CONS, LOG_USER);
 
@@ -301,63 +313,12 @@ int main(int argc, char *argv[])
 
 static void daemonize(void)
 {
-#if 0
-    pid_t pid;
-
-    // Fork off the parent process
-    pid = fork();
-
-    // If we got a good PID, then we can exit the parent process.
-    if (pid < 0)
-    {
-        exit(EXIT_FAILURE);
-    }
-    if (pid > 0)
-    {
-        exit(EXIT_SUCCESS);
-    }
-
-    // On success: The child process becomes session leader
-    if (setsid() < 0)
-    {
-        exit(EXIT_FAILURE);
-    }
-
-    // Fork off for the second time
-    pid = fork();
-
-    // An error occurred
-    if (pid < 0)
-    {
-        exit(EXIT_FAILURE);
-    }
-
-    // Success: Let the parent terminate
-    if (pid > 0)
-    {
-        exit(EXIT_SUCCESS);
-    }
-
-    // Set new file permissions
-    umask(0);
-
-    // Change the working directory to the root directory
-    // or another appropriated directory
-    chdir("/");
-
-    // Close all open file descriptors
-    for (int x = sysconf(_SC_OPEN_MAX); x >= 0; x--)
-    {
-        close(x);
-    }
-#else
     if (daemon(0, 0) != 0)
     {
         perror("daemon");
         syslog(LOG_ERR, "daemon: %m");
         exit(EXIT_FAILURE);
     }
-#endif
 }
 
 static void sig_handler(int signo)
@@ -416,16 +377,17 @@ static void sig_handler(int signo)
             closelog();
             exit(EXIT_SUCCESS);
             break;
-
+#ifndef USE_AESD_CHAR_DEVICE
         case SIGUSR1:
             timer_handler(file); 
             break;
-
+#endif // USE_AESD_CHAR_DEVICE
         default:
             break;
     }
 }
 
+#ifndef USE_AESD_CHAR_DEVICE
 static void timer_handler(FILE *file)
 {
     char buf[256];
@@ -459,3 +421,4 @@ static void timer_handler(FILE *file)
 
     fflush(file);
 }
+#endif // USE_AESD_CHAR_DEVICE
