@@ -13,7 +13,6 @@
 #else
 #include <string.h>
 #include <stdio.h>
-#include <syslog.h>
 #endif // __KERNEL__
 
 #include "aesd-circular-buffer.h"
@@ -50,18 +49,14 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
     size_t total_size = 0;
     
     DEBUG_LOG("Searching for entry at offset: %zu\r\n", char_offset);
-    syslog(LOG_INFO, "Searching for entry at offset: %zu", char_offset);
     DEBUG_LOG("Buffer out offs: %d, Buffer in offs: %d\r\n", buffer->out_offs, buffer->in_offs);
-    syslog(LOG_INFO, "Buffer out offs: %d, Buffer in offs: %d", buffer->out_offs, buffer->in_offs);
     DEBUG_LOG("Buffer full: %d\r\n", buffer->full);
-    syslog(LOG_INFO, "Buffer full: %d", buffer->full);
 
     bool buffer_empty = (buffer->in_offs == buffer->out_offs) && (buffer->full == false);
 
     if (buffer_empty)
     {
         DEBUG_LOG("Buffer is empty\r\n");
-        syslog(LOG_INFO, "Buffer is empty");
         return NULL;
     }
 
@@ -71,7 +66,6 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
         total_size += buffer->entry[i].size;
 
         DEBUG_LOG("Total size: %zu\r\n", total_size);
-        syslog(LOG_INFO, "Total size: %zu", total_size);
 
         if(total_size > char_offset)
         {
@@ -91,35 +85,38 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
 * If the buffer was already full, overwrites the oldest entry and advances buffer->out_offs to the
 * new start location.
 * Any necessary locking must be handled by the caller
-* Any memory referenced in @param add_entry must be allocated by and/or must have a lifetime managed by the caller.
+* @return NULL or, if an entry was overwritten, a pointer to the overwritten entry
 */
-void aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
+const char *aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
 {
     /**
     * TODO: implement per description
     */
     
+    const char *overwritten_entry = NULL;
+
     if (buffer->full)
     {
+        overwritten_entry = buffer->entry[buffer->out_offs].buffptr;
+
         buffer->out_offs = (buffer->out_offs + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
 
         DEBUG_LOG("Buffer is full, overwriting oldest entry\r\n");
-        syslog(LOG_INFO, "Buffer is full, overwriting oldest entry");
     }
 
     buffer->entry[buffer->in_offs] = *add_entry;
     buffer->in_offs = (buffer->in_offs + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
     
     DEBUG_LOG("Added entry to buffer: %s\r\n", add_entry->buffptr);
-    syslog(LOG_INFO, "Added entry to buffer: %s", add_entry->buffptr);
 
     if (buffer->in_offs == buffer->out_offs)
     {
         buffer->full = true;
 
         DEBUG_LOG("Buffer is full\r\n");
-        syslog(LOG_INFO, "Buffer is full");
     }
+
+    return overwritten_entry;
 }
 
 /**
