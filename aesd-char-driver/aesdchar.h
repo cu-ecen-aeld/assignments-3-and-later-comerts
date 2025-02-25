@@ -30,7 +30,8 @@ struct aesd_dev
      */
 
     struct aesd_circular_buffer *circular_buffer;
-    int aesd_buffer_entry;
+    char *write_buffer;
+    int write_buffer_index;
     struct mutex lock;     /* mutual exclusion semaphore     */
     struct cdev cdev;     /* Char device structure      */
 };

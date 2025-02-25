@@ -165,17 +165,14 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff
 
     size_t bytes_copied = 0;
 
-    static char write_buffer[AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED][AESDCHAR_MAX_WRITE_SIZE];
-    static int write_buffer_index = 0;
-
     if (mutex_lock_interruptible(&dev->lock))
     {
         PDEBUG("mutex_lock_interruptible failed");
         return -ERESTARTSYS;
     }
 
-    PDEBUG("write_buffer_index: %d", write_buffer_index);
-    PDEBUG("write_buffer: %s", write_buffer[write_buffer_index]);
+    PDEBUG("write_buffer_index: %d", dev->write_buffer_index);
+    PDEBUG("dev->write_buffer 1: %s", dev->write_buffer);
 
     if (count >= AESDCHAR_MAX_WRITE_SIZE)
     {
@@ -183,16 +180,24 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff
         goto out;
     }
 
-    bytes_copied = copy_from_user(write_buffer[write_buffer_index], buf, count);
+    if (dev->write_buffer_index + count >= AESDCHAR_MAX_WRITE_SIZE)
+    {
+        retval = -EINVAL;
+        goto out;
+    }
+
+    bytes_copied = copy_from_user(&dev->write_buffer[dev->write_buffer_index], buf, count);
     if (bytes_copied != 0)
     {
         retval = -EFAULT;
         goto out;
     }
 
-    if (write_buffer[write_buffer_index][bytes_copied - 1] == '\n')
+    PDEBUG("dev->write_buffer 2: %s", dev->write_buffer);
+
+    if (dev->write_buffer[dev->write_buffer_index + bytes_copied - 1] == '\n')
     {
-        write_buffer[write_buffer_index][bytes_copied] = '\0';
+        dev->write_buffer[dev->write_buffer_index + bytes_copied] = '\0';
 
         struct aesd_buffer_entry add_entry;
         add_entry.size = bytes_copied;
@@ -203,17 +208,21 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff
             goto out;
         }
 
+        PDEBUG("dev->write_buffer 3: %s", dev->write_buffer);
+
         const char *overwritten_entry = aesd_circular_buffer_add_entry(dev->circular_buffer, &add_entry);
         if (overwritten_entry != NULL)
         {
             kfree(overwritten_entry);
+            PDEBUG("Overwritten entry");
         }
 
-        write_buffer_index = 0;
+        dev->write_buffer_index = 0;
     }
     else
     {
-        write_buffer_index += bytes_copied;
+        dev->write_buffer_index += bytes_copied;
+        PDEBUG("dev->write_buffer_index 2: %d", dev->write_buffer_index);
     }
 
     retval = bytes_copied;
@@ -279,6 +288,14 @@ int aesd_init_module(void)
         return -ENOMEM;
     }
 
+    aesd_device->write_buffer = kmalloc(AESDCHAR_MAX_WRITE_SIZE, GFP_KERNEL);
+    if (aesd_device->write_buffer == NULL)
+    {
+        PDEBUG("write_buffer kmalloc failed");
+        aesd_cleanup_module();
+        return -ENOMEM;
+    }
+
     aesd_circular_buffer_init(aesd_device->circular_buffer);
 
     mutex_init(&aesd_device->lock);
@@ -316,6 +333,7 @@ void aesd_cleanup_module(void)
             }
 
             kfree(aesd_device->circular_buffer);
+            kfree(aesd_device->write_buffer);
         }
 
         kfree(aesd_device);
