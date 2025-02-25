@@ -120,9 +120,9 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count, loff_t *f_p
 
     if (bytes_to_copy > 0)
     {
-        PDEBUG("copying %s to user", entry->buffptr + entry_offset_byte);
+        PDEBUG("copying %s to user", &entry->buffptr[entry_offset_byte]);
 
-        bytes_copied = copy_to_user(buf, entry->buffptr + entry_offset_byte, bytes_to_copy);
+        bytes_copied = copy_to_user(buf, &entry->buffptr[entry_offset_byte], bytes_to_copy);
         if (bytes_copied != 0)
         {
             retval = -EFAULT;
