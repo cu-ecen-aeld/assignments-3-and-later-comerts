@@ -151,6 +151,8 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff
 
     struct aesd_dev *dev = filp->private_data;
 
+    unsigned int write_count = dev->write_buffer_index + count;
+
     if (mutex_lock_interruptible(&dev->lock))
     {
         PDEBUG("mutex_lock_interruptible failed");
@@ -163,7 +165,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff
         goto out;
     }
 
-    if (dev->write_buffer_index + count >= AESDCHAR_MAX_WRITE_SIZE)
+    if (write_count >= AESDCHAR_MAX_WRITE_SIZE)
     {
         retval = -EINVAL;
         goto out;
@@ -177,20 +179,20 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff
 
     PDEBUG("dev->write_buffer: %s", dev->write_buffer);
 
-    if (dev->write_buffer[dev->write_buffer_index + count - 1] == '\n')
+    if (dev->write_buffer[write_count - 1] == '\n')
     {
-        dev->write_buffer[dev->write_buffer_index + count] = '\0';
+        dev->write_buffer[write_count] = '\0';
 
         struct aesd_buffer_entry add_entry;
-        add_entry.size = count;
-        add_entry.buffptr = kmalloc(count, GFP_KERNEL);
+        add_entry.size = write_count;
+        add_entry.buffptr = kmalloc(write_count, GFP_KERNEL);
         if (add_entry.buffptr == NULL)
         {
             retval = -ENOMEM;
             goto out;
         }
 
-        if (memcpy((char*)add_entry.buffptr, (const char*)dev->write_buffer, count) == NULL)
+        if (memcpy((char*)add_entry.buffptr, (const char*)dev->write_buffer, write_count) == NULL)
         {
             PDEBUG("memcpy failed");
             kfree(add_entry.buffptr);
@@ -215,7 +217,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff
         PDEBUG("dev->write_buffer_index 2: %d", dev->write_buffer_index);
     }
 
-    retval = count;
+    retval = write_count;
 
 out:
     mutex_unlock(&dev->lock);
