@@ -217,7 +217,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff
         PDEBUG("dev->write_buffer_index 2: %d", dev->write_buffer_index);
     }
 
-    retval = write_count;
+    retval = count;
 
 out:
     mutex_unlock(&dev->lock);
