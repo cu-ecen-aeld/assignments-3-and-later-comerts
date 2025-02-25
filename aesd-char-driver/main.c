@@ -33,7 +33,7 @@ void aesd_cleanup_module(void);
 MODULE_AUTHOR("comerts"); /** TODO: fill in your name **/
 MODULE_LICENSE("Dual BSD/GPL");
 
-struct aesd_dev *aesd_device;
+struct aesd_dev aesd_device;
 
 int aesd_open(struct inode *inode, struct file *filp)
 {
@@ -267,7 +267,7 @@ int aesd_init_module(void)
         printk(KERN_WARNING "Can't get major %d\n", aesd_major);
         return result;
     }
-    memset(aesd_device, 0, sizeof(struct aesd_dev));
+    memset(&aesd_device, 0, sizeof(struct aesd_dev));
 
     /**
      * TODO: initialize the AESD specific portion of the device
@@ -275,17 +275,10 @@ int aesd_init_module(void)
 
     PDEBUG("Initializing aesd_device");
 
-    aesd_device = kmalloc(sizeof(struct aesd_dev), GFP_KERNEL);
-    if (aesd_device == NULL)
-    {
-        PDEBUG("aesd_device kmalloc failed");
-        return -ENOMEM;
-    }
-
     PDEBUG("Initializing circular_buffer");
 
-    aesd_device->circular_buffer = kmalloc(sizeof(struct aesd_circular_buffer), GFP_KERNEL);
-    if (aesd_device->circular_buffer == NULL)
+    aesd_device.circular_buffer = kmalloc(sizeof(struct aesd_circular_buffer), GFP_KERNEL);
+    if (aesd_device.circular_buffer == NULL)
     {
         PDEBUG("circular_buffer kmalloc failed");
         aesd_cleanup_module();
@@ -294,19 +287,19 @@ int aesd_init_module(void)
 
     PDEBUG("Initializing write_buffer");
 
-    aesd_device->write_buffer = kmalloc(AESDCHAR_MAX_WRITE_SIZE, GFP_KERNEL);
-    if (aesd_device->write_buffer == NULL)
+    aesd_device.write_buffer = kmalloc(AESDCHAR_MAX_WRITE_SIZE, GFP_KERNEL);
+    if (aesd_device.write_buffer == NULL)
     {
         PDEBUG("write_buffer kmalloc failed");
         aesd_cleanup_module();
         return -ENOMEM;
     }
 
-    aesd_circular_buffer_init(aesd_device->circular_buffer);
+    aesd_circular_buffer_init(aesd_device.circular_buffer);
 
-    mutex_init(&aesd_device->lock);
+    mutex_init(&aesd_device.lock);
 
-    result = aesd_setup_cdev(aesd_device);
+    result = aesd_setup_cdev(&aesd_device);
 
     if (result)
     {
@@ -320,29 +313,36 @@ void aesd_cleanup_module(void)
 {
     dev_t devno = MKDEV(aesd_major, aesd_minor);
 
-    cdev_del(&aesd_device->cdev);
+    cdev_del(&aesd_device.cdev);
 
     /**
      * TODO: cleanup AESD specific poritions here as necessary
      */
 
-    if (aesd_device != NULL)
-    {
-        if (aesd_device->circular_buffer != NULL)
-        {
-            for (int i = 0; i < AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED; i++)
-            {
-                if (aesd_device->circular_buffer->entry[i].buffptr != NULL)
-                {
-                    kfree(aesd_device->circular_buffer->entry[i].buffptr);
-                }
-            }
+    PDEBUG("Cleaning up aesd_device");
 
-            kfree(aesd_device->circular_buffer);
-            kfree(aesd_device->write_buffer);
+    if (aesd_device.circular_buffer != NULL)
+    {
+        PDEBUG("Free circular buffer");
+
+        for (int i = 0; i < AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED; i++)
+        {
+            if (aesd_device.circular_buffer->entry[i].buffptr != NULL)
+            {
+                kfree(aesd_device.circular_buffer->entry[i].buffptr);
+            }
         }
 
-        kfree(aesd_device);
+        if (aesd_device.circular_buffer != NULL)
+        {
+            kfree(aesd_device.circular_buffer);
+        }
+
+        PDEBUG("Free write buffer");
+        if (aesd_device.write_buffer != NULL)
+        {
+            kfree(aesd_device.write_buffer);
+        }
     }
 
     unregister_chrdev_region(devno, 1);
