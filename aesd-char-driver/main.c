@@ -76,7 +76,6 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count, loff_t *f_p
     size_t entry_offset_byte = 0;
     size_t entry_size = 0;
     size_t bytes_to_copy = 0;
-    size_t bytes_copied = 0;
     
     if (mutex_lock_interruptible(&dev->lock))
     {
@@ -122,19 +121,19 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count, loff_t *f_p
     {
         PDEBUG("copying %s to user", &entry->buffptr[entry_offset_byte]);
 
-        bytes_copied = copy_to_user(buf, &entry->buffptr[entry_offset_byte], bytes_to_copy);
-        if (bytes_copied != 0)
+        if (copy_to_user(buf, &entry->buffptr[entry_offset_byte], bytes_to_copy) != 0)
         {
+            PDEBUG("copy_to_user failed");
             retval = -EFAULT;
             goto out;
         }
 
-        *f_pos += bytes_copied;
+        *f_pos += bytes_to_copy;
     }
 
-    retval = bytes_copied;
+    retval = bytes_to_copy;
 
-    PDEBUG("bytes_copied: %zu", retval);
+    PDEBUG("copied %zu bytes", retval);
 
 out:
     mutex_unlock(&dev->lock);
