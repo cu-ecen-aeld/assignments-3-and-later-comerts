@@ -59,31 +59,7 @@ int aesd_release(struct inode *inode, struct file *filp)
      */
 
     PDEBUG("release");
-    struct aesd_dev *dev = filp->private_data;
-    if ( (filp->f_flags & O_ACCMODE) == O_WRONLY)
-    {
-        PDEBUG("Free circular buffer");
 
-        if (mutex_lock_interruptible(&dev->lock))
-        {
-            return -ERESTARTSYS;
-        }
-
-        for (int i = 0; i < AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED; i++)
-        {
-            if (dev->circular_buffer->entry[i].buffptr != NULL)
-            {
-                kfree(dev->circular_buffer->entry[i].buffptr);
-            }
-        }
-
-        if (dev->circular_buffer != NULL)
-        {
-            kfree(dev->circular_buffer);
-        }
-
-        mutex_unlock(&dev->lock);
-    }
     return 0;
 }
 
