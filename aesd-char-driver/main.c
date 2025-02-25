@@ -273,12 +273,16 @@ int aesd_init_module(void)
      * TODO: initialize the AESD specific portion of the device
      */
 
+    PDEBUG("Initializing aesd_device");
+
     aesd_device = kmalloc(sizeof(struct aesd_dev), GFP_KERNEL);
     if (aesd_device == NULL)
     {
         PDEBUG("aesd_device kmalloc failed");
         return -ENOMEM;
     }
+
+    PDEBUG("Initializing circular_buffer");
 
     aesd_device->circular_buffer = kmalloc(sizeof(struct aesd_circular_buffer), GFP_KERNEL);
     if (aesd_device->circular_buffer == NULL)
@@ -287,6 +291,8 @@ int aesd_init_module(void)
         aesd_cleanup_module();
         return -ENOMEM;
     }
+
+    PDEBUG("Initializing write_buffer");
 
     aesd_device->write_buffer = kmalloc(AESDCHAR_MAX_WRITE_SIZE, GFP_KERNEL);
     if (aesd_device->write_buffer == NULL)
