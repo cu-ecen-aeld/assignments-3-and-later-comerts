@@ -80,12 +80,14 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count, loff_t *f_p
     
     if (mutex_lock_interruptible(&dev->lock))
     {
+        PDEBUG("mutex_lock_interruptible failed");
         return -ERESTARTSYS;
     }
 
     struct aesd_buffer_entry *entry = aesd_circular_buffer_find_entry_offset_for_fpos(dev->circular_buffer, *(size_t*)f_pos, &entry_offset_byte);
     if (entry == NULL)
     {
+        PDEBUG("entry is NULL");
         retval = -EINVAL;
         goto out;
     }
@@ -93,16 +95,23 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count, loff_t *f_p
     entry_size = entry->size;
     if (entry_size == 0)
     {
+        PDEBUG("entry_size is 0");
         retval = 0;
         goto out;
     }
     
+    PDEBUG("entry_size: %zu", entry_size);
+    PDEBUG("entry_offset_byte: %zu", entry_offset_byte);
+
     bytes_to_copy = entry_size - entry_offset_byte;
     if (bytes_to_copy == 0)
     {
+        PDEBUG("bytes_to_copy is 0");
         retval = 0;
         goto out;
     }
+
+    PDEBUG("bytes_to_copy: %zu", bytes_to_copy);
 
     if (bytes_to_copy > count)
     {
@@ -111,6 +120,8 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count, loff_t *f_p
 
     if (bytes_to_copy > 0)
     {
+        PDEBUG("copying %s to user", entry->buffptr + entry_offset_byte);
+
         bytes_copied = copy_to_user(buf, entry->buffptr + entry_offset_byte, bytes_to_copy);
         if (bytes_copied != 0)
         {
@@ -122,6 +133,8 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count, loff_t *f_p
     }
 
     retval = bytes_copied;
+
+    PDEBUG("bytes_copied: %zu", retval);
 
 out:
     mutex_unlock(&dev->lock);
@@ -144,9 +157,6 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff
         PDEBUG("mutex_lock_interruptible failed");
         return -ERESTARTSYS;
     }
-
-    PDEBUG("write_buffer_index: %d", dev->write_buffer_index);
-    PDEBUG("dev->write_buffer 1: %s", dev->write_buffer);
 
     if (count >= AESDCHAR_MAX_WRITE_SIZE)
     {
