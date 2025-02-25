@@ -175,7 +175,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff
         goto out;
     }
 
-    PDEBUG("dev->write_buffer 2: %s", dev->write_buffer);
+    PDEBUG("dev->write_buffer: %s", dev->write_buffer);
 
     if (dev->write_buffer[dev->write_buffer_index + count - 1] == '\n')
     {
@@ -190,7 +190,15 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff
             goto out;
         }
 
-        PDEBUG("dev->write_buffer 3: %s", dev->write_buffer);
+        if (memcpy((char*)add_entry.buffptr, (const char*)dev->write_buffer, count) == NULL)
+        {
+            PDEBUG("memcpy failed");
+            kfree(add_entry.buffptr);
+            retval = -ENOMEM;
+            goto out;
+        }
+
+        PDEBUG("add_entry.buffptr: %s", add_entry.buffptr);
 
         const char *overwritten_entry = aesd_circular_buffer_add_entry(dev->circular_buffer, &add_entry);
         if (overwritten_entry != NULL)
