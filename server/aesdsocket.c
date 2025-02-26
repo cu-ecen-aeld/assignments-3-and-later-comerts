@@ -27,22 +27,26 @@
 
 #define TIMER_INTERVAL_SEC (10U)
 
-#define USE_AESD_CHAR_DEVICE    (1) // Set to 1 to use AESD char device, 0 to use file
+#define DEVICE_NAME ("/dev/aesdchar")
 
 static struct sockaddr_in cli_addr;
 static const char *SOCK_FILE = "/var/tmp/aesdsocketdata";
 static const int PORT_NO = 9000;
 
+#if USE_AESD_CHAR_DEVICE == 0
 static FILE *file;
+#else // USE_AESD_CHAR_DEVICE
+static int dev_fd;
+#endif // USE_AESD_CHAR_DEVICE
 static pthread_mutex_t fileMutex;
 static int sockfd;
-#ifndef USE_AESD_CHAR_DEVICE
+#if USE_AESD_CHAR_DEVICE == 0
 static timer_t timerid;
 #endif // USE_AESD_CHAR_DEVICE
 
 static void daemonize(void);
 static void sig_handler(int signo);
-#ifndef USE_AESD_CHAR_DEVICE
+#if USE_AESD_CHAR_DEVICE == 0
 static void timer_handler(FILE *file);
 #endif // USE_AESD_CHAR_DEVICE
 
@@ -77,7 +81,7 @@ int main(int argc, char *argv[])
 
 	struct sigaction new_action = {0};
 	struct sigaction old_action = {0};
-#ifndef USE_AESD_CHAR_DEVICE
+#if USE_AESD_CHAR_DEVICE == 0
     struct sigevent sev = {0};
     struct itimerspec its = {0};
 #endif //USE_AESD_CHAR_DEVICE
@@ -99,7 +103,7 @@ int main(int argc, char *argv[])
         sigaction(SIGTERM, &new_action, NULL);
 	}
 
-#ifndef USE_AESD_CHAR_DEVICE
+#if USE_AESD_CHAR_DEVICE == 0
     sigaction(SIGUSR1, NULL, &old_action);
     if (old_action.sa_handler != SIG_IGN)
     {
@@ -114,7 +118,7 @@ int main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 
-#ifndef USE_AESD_CHAR_DEVICE
+#if USE_AESD_CHAR_DEVICE == 0
     // Set up timer
     sev.sigev_notify = SIGEV_SIGNAL;
     sev.sigev_signo = SIGUSR1;
@@ -139,6 +143,7 @@ int main(int argc, char *argv[])
 
     openlog("aesdsocket", LOG_PID | LOG_CONS, LOG_USER);
 
+#if USE_AESD_CHAR_DEVICE == 0
     file = fopen(SOCK_FILE, "a+");
     if (file == NULL)
     {
@@ -147,6 +152,7 @@ int main(int argc, char *argv[])
         closelog();
         return EPERM;
     }
+#endif // USE_AESD_CHAR_DEVICE
 
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd < 0)
@@ -162,7 +168,9 @@ int main(int argc, char *argv[])
         perror("ERROR setting socket options");
         syslog(LOG_ERR, "ERROR setting socket options: %m");
         close(sockfd);
+#if USE_AESD_CHAR_DEVICE == 0
         fclose(file);
+#endif // USE_AESD_CHAR_DEVICE
         closelog();
         exit(EXIT_FAILURE);
     }
@@ -177,7 +185,9 @@ int main(int argc, char *argv[])
         perror("ERROR on binding");
         syslog(LOG_ERR, "ERROR on binding: %m");
         close(sockfd);
+#if USE_AESD_CHAR_DEVICE == 0
         fclose(file);
+#endif // USE_AESD_CHAR_DEVICE
         closelog();
         exit(EXIT_FAILURE);
     }
@@ -209,7 +219,9 @@ int main(int argc, char *argv[])
                 syslog(LOG_ERR, "ERROR on accept: %m");
                 free(clientsockfd);
                 close(sockfd);
+#if USE_AESD_CHAR_DEVICE == 0
                 fclose(file);
+#endif // USE_AESD_CHAR_DEVICE
                 closelog();
                 exit(EXIT_FAILURE);
             }
@@ -242,7 +254,22 @@ int main(int argc, char *argv[])
 
         threadData->sockfd = clientsockfd;
         threadData->mutex = &fileMutex;
+#if USE_AESD_CHAR_DEVICE == 0
         threadData->filefd = file;
+#else // USE_AESD_CHAR_DEVICE
+        threadData->fpos = 0;
+        threadData->devfd = open(DEVICE_NAME, O_RDWR);
+        if (threadData->devfd < 0)
+        {
+            perror("open");
+            syslog(LOG_ERR, "open: %m");
+            close(*clientsockfd);
+            free(clientsockfd);
+            free(sockThread);
+            free(threadData);
+            continue;
+        }
+#endif // USE_AESD_CHAR_DEVICE
         threadData->thread_complete_success = false;
 
         insert_thread_data(sockThread, threadData);
@@ -305,7 +332,11 @@ int main(int argc, char *argv[])
         }
     }
 
+#if USE_AESD_CHAR_DEVICE == 0
     fclose(file);
+#else //USE_AESD_CHAR_DEVICE
+    close(dev_fd);
+#endif //USE_AESD_CHAR_DEVICE
     close(sockfd);
     closelog();
     return 0;
@@ -329,7 +360,12 @@ static void sig_handler(int signo)
     {
         case SIGINT:
         case SIGTERM:
+#if USE_AESD_CHAR_DEVICE == 0
+            timer_delete(timerid);
             fclose(file);
+#else //USE_AESD_CHAR_DEVICE
+            close(dev_fd);
+#endif //USE_AESD_CHAR_DEVICE
             if (remove(SOCK_FILE) != 0)
             {
                 perror("remove");
@@ -377,7 +413,7 @@ static void sig_handler(int signo)
             closelog();
             exit(EXIT_SUCCESS);
             break;
-#ifndef USE_AESD_CHAR_DEVICE
+#if USE_AESD_CHAR_DEVICE == 0
         case SIGUSR1:
             timer_handler(file); 
             break;
@@ -387,7 +423,7 @@ static void sig_handler(int signo)
     }
 }
 
-#ifndef USE_AESD_CHAR_DEVICE
+#if USE_AESD_CHAR_DEVICE == 0
 static void timer_handler(FILE *file)
 {
     char buf[256];

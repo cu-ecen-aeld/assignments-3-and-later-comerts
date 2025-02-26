@@ -22,6 +22,8 @@ struct thread_data
     pthread_mutex_t *mutex;
     int *sockfd;
     FILE *filefd;
+    int devfd;
+    int fpos;
 
     /**
      * Set to true if the thread completed with success, false

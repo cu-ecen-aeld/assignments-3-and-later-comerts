@@ -23,7 +23,11 @@ void* threadfunc(void* thread_param)
 
     pthread_mutex_lock(mutex);
 
+#if USE_AESD_CHAR_DEVICE == 0
     if (0 != handle_client(thread_func_args->sockfd, thread_func_args->filefd))
+#else //USE_AESD_CHAR_DEVICE
+    if (0 != handle_client(thread_func_args->sockfd, &thread_func_args->devfd, &thread_func_args->fpos))
+#endif //USE_AESD_CHAR_DEVICE
     {
         syslog(LOG_ERR, "handle_client: %m");
     }
