@@ -180,9 +180,9 @@ int handle_client(int *newsockfd, int *devfd, int *fpos)
 
     fpos += xbuf;
 
-    size_t fsize = *fpos;
+    const size_t FSIZE = 4096;
 
-    char *fileBuffer = (char *)malloc(fsize);
+    char *fileBuffer = (char *)malloc(FSIZE);
     if (fileBuffer == NULL)
     {
         perror("malloc");
@@ -194,19 +194,23 @@ int handle_client(int *newsockfd, int *devfd, int *fpos)
 
     do
     {
-        if ((rsize = read(*devfd, &fileBuffer[rpos], fsize)) < 0)
+        if ((rsize = read(*devfd, &fileBuffer[rpos], FSIZE)) < 0)
         {
             perror("read");
             ret = 1;
+        }
+        else if (rsize == 0)
+        {
+            break;
         }
         else
         {
             rpos += rsize;
         }
-    } while (rpos < fsize);
+    } while (rpos < FSIZE);
 
 
-    if (write(*newsockfd, fileBuffer, fsize) < 0)
+    if (write(*newsockfd, fileBuffer, FSIZE) < 0)
     {
         perror("ERROR writing to socket");
         ret = 1;
