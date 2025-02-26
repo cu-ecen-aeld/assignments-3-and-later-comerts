@@ -208,7 +208,7 @@ int handle_client(int *newsockfd, int *devfd)
     } while (rpos < FSIZE);
 
 
-    if (write(*newsockfd, fileBuffer, FSIZE) < 0)
+    if (write(*newsockfd, fileBuffer, strlen(fileBuffer)) < 0)
     {
         perror("ERROR writing to socket");
         ret = 1;
