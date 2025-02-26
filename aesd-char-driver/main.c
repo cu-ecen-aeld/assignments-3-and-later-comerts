@@ -58,8 +58,6 @@ int aesd_release(struct inode *inode, struct file *filp)
      * TODO: handle release
      */
 
-    PDEBUG("release");
-
     return 0;
 }
 
