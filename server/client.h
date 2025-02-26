@@ -10,7 +10,7 @@
 #if USE_AESD_CHAR_DEVICE == 0
 int handle_client(int *newsockfd, FILE *file);
 #else //USE_AESD_CHAR_DEVICE
-int handle_client(int *newsockfd, int *devfd, int *fpos);
+int handle_client(int *newsockfd, int *devfd);
 #endif //USE_AESD_CHAR_DEVICE
 
 #endif // CLIENT_H

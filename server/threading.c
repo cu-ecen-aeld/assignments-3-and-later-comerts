@@ -26,7 +26,7 @@ void* threadfunc(void* thread_param)
 #if USE_AESD_CHAR_DEVICE == 0
     if (0 != handle_client(thread_func_args->sockfd, thread_func_args->filefd))
 #else //USE_AESD_CHAR_DEVICE
-    if (0 != handle_client(thread_func_args->sockfd, &thread_func_args->devfd, &thread_func_args->fpos))
+    if (0 != handle_client(thread_func_args->sockfd, &thread_func_args->devfd))
 #endif //USE_AESD_CHAR_DEVICE
     {
         syslog(LOG_ERR, "handle_client: %m");

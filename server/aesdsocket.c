@@ -257,9 +257,9 @@ int main(int argc, char *argv[])
 #if USE_AESD_CHAR_DEVICE == 0
         threadData->filefd = file;
 #else // USE_AESD_CHAR_DEVICE
-        threadData->fpos = 0;
-        threadData->devfd = open(DEVICE_NAME, O_RDWR);
-        if (threadData->devfd < 0)
+        dev_fd = open(DEVICE_NAME, O_RDWR);
+
+        if (dev_fd < 0)
         {
             perror("open");
             syslog(LOG_ERR, "open: %m");
@@ -269,6 +269,7 @@ int main(int argc, char *argv[])
             free(threadData);
             continue;
         }
+        threadData->devfd = dev_fd;
 #endif // USE_AESD_CHAR_DEVICE
         threadData->thread_complete_success = false;
 

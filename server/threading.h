@@ -23,7 +23,6 @@ struct thread_data
     int *sockfd;
     FILE *filefd;
     int devfd;
-    int fpos;
 
     /**
      * Set to true if the thread completed with success, false

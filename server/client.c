@@ -118,7 +118,7 @@ int handle_client(int *newsockfd, FILE *file)
     return ret;
 }
 #else //USE_AESD_CHAR_DEVICE
-int handle_client(int *newsockfd, int *devfd, int *fpos)
+int handle_client(int *newsockfd, int *devfd)
 {
     int ret = 0;
     const int BUFSIZE = 256;
@@ -177,8 +177,6 @@ int handle_client(int *newsockfd, int *devfd, int *fpos)
         perror("write");
         ret = 1;
     }
-
-    fpos += xbuf;
 
     const size_t FSIZE = 4096;
 
