@@ -9,7 +9,7 @@ ROOT_DIR:=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 
 CFLAGS ?= -ggdb -Werror -Wall -Wextra -Wno-format-truncation
 
-INCLUDES ?= -I$(ROOT_DIR)/include
+INCLUDES ?= -I$(ROOT_DIR)/include -I$(ROOT_DIR)/../aesd-char-driver
 
 LDFLAGS ?=  -lpthread -lrt
 

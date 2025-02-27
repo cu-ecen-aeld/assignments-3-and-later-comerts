@@ -17,8 +17,11 @@
 #include <linux/types.h>
 #include <linux/cdev.h>
 #include <linux/fs.h> // file_operations
+
+#include "access_ok_version.h"
 #include "aesdchar.h"
 #include "aesd-circular-buffer.h"
+#include "aesd_ioctl.h"
 
 int aesd_major =   0; // use dynamic major
 int aesd_minor =   0;
@@ -27,8 +30,11 @@ int aesd_open(struct inode *inode, struct file *filp);
 int aesd_release(struct inode *inode, struct file *filp);
 ssize_t aesd_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos);
 ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff_t *f_pos);
+loff_t aesd_llseek(struct file *filp, loff_t off, int whence);
+long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
 int aesd_init_module(void);
 void aesd_cleanup_module(void);
+static long aesd_adjust_file_offset(struct file *filp, unsigned int write_cmd, unsigned int write_cmd_offset);
 
 MODULE_AUTHOR("comerts"); /** TODO: fill in your name **/
 MODULE_LICENSE("Dual BSD/GPL");
@@ -216,6 +222,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count, loff
     }
 
     retval = count;
+    *f_pos += count;
 
 out:
     mutex_unlock(&dev->lock);
@@ -223,10 +230,113 @@ out:
     return retval;
 }
 
+loff_t aesd_llseek(struct file *filp, loff_t off, int whence)
+{
+    struct aesd_dev *dev = filp->private_data;
+    loff_t newpos;
+
+    if (mutex_lock_interruptible(&dev->lock))
+    {
+        PDEBUG("mutex_lock_interruptible failed");
+        return -ERESTARTSYS;
+    }
+
+    switch(whence)
+    {
+        case 0: /* SEEK_SET */
+            newpos = off;
+            break;
+        case 1: /* SEEK_CUR */
+            newpos = filp->f_pos + off;
+            break;
+        case 2: /* SEEK_END */
+            newpos = (loff_t)aesd_circular_buffer_size(dev->circular_buffer, dev->circular_buffer->out_offs);
+            break;
+        default: /* can't happen */
+            newpos = -EINVAL;
+            goto out;
+    }
+
+    if (newpos < 0)
+    {
+        newpos = -EINVAL;
+        goto out;
+    }
+
+    filp->f_pos = newpos;
+
+out:
+    mutex_unlock(&dev->lock);
+
+    return newpos;
+}
+
+long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+{
+
+    int err = 0;
+    int retval = 0;
+
+    /*
+     * extract the type and number bitfields, and don't decode
+     * wrong cmds: return ENOTTY (inappropriate ioctl) before access_ok()
+     */
+    if (_IOC_TYPE(cmd) != AESD_IOC_MAGIC)
+    {
+        return -ENOTTY;
+    }
+
+    if (_IOC_NR(cmd) > AESDCHAR_IOC_MAXNR)
+    {
+        return -ENOTTY;
+    }
+
+    /*
+     * the direction is a bitmask, and VERIFY_WRITE catches R/W
+     * transfers. `Type' is user-oriented, while
+     * access_ok is kernel-oriented, so the concept of "read" and
+     * "write" is reversed
+     */
+    if (_IOC_DIR(cmd) & _IOC_READ)
+    {
+        err = !access_ok_wrapper(VERIFY_WRITE, (void __user *)arg, _IOC_SIZE(cmd));
+    }
+    else if (_IOC_DIR(cmd) & _IOC_WRITE)
+    {
+        err =  !access_ok_wrapper(VERIFY_READ, (void __user *)arg, _IOC_SIZE(cmd));
+    }
+
+    if (err)
+    {
+        return -EFAULT;
+    }
+
+    switch(cmd)
+    {
+        case AESDCHAR_IOCSEEKTO:
+            struct aesd_seekto seekto;
+            if (copy_from_user(&seekto, (struct aesd_seekto*)arg, sizeof(struct aesd_seekto)))
+            {
+                return -EFAULT;
+            }
+            else
+            {
+                retval = aesd_adjust_file_offset(filp, seekto.write_cmd, seekto.write_cmd_offset);
+            }
+            break;
+        default:  /* redundant, as cmd was checked against MAXNR */
+            return -ENOTTY;
+    }
+
+    return retval;
+}
+
 struct file_operations aesd_fops = {
     .owner =    THIS_MODULE,
+    .llseek =   aesd_llseek,
     .read =     aesd_read,
     .write =    aesd_write,
+    .unlocked_ioctl = aesd_ioctl,
     .open =     aesd_open,
     .release =  aesd_release,
 };
@@ -336,6 +446,61 @@ void aesd_cleanup_module(void)
     }
 
     unregister_chrdev_region(devno, 1);
+}
+
+/**
+ * Adjust the file offset (f_pos) parmeter of @param filp based on the location specified by
+ * @param write_cmd (the zero referenced command to locate)
+ * and @param write_cmd_offset (the zero referenced offset into the command)
+ * @return 0 if successful, negative if error occured:
+ *      -ERESTARTSYS if mutex could not be obtained
+ *      -EINVAL if write command of write cmd offset was out of range
+ */
+static long aesd_adjust_file_offset(struct file *filp, unsigned int write_cmd, unsigned int write_cmd_offset)
+{
+    struct aesd_dev *dev = filp->private_data;
+    long newpos = 0;
+    size_t total_size = 0;
+    size_t char_offset = 0;
+    size_t entry_offset_byte = 0;
+
+    if (mutex_lock_interruptible(&dev->lock))
+    {
+        return -ERESTARTSYS;
+    }
+
+    if (write_cmd >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED)
+    {
+        newpos = -EINVAL;
+        goto out;
+    }
+
+    if (write_cmd_offset >= dev->circular_buffer->entry[write_cmd].size)
+    {
+        newpos = -EINVAL;
+        goto out;
+    }
+
+    total_size = aesd_circular_buffer_size(dev->circular_buffer, write_cmd);
+
+    char_offset = total_size + write_cmd_offset;
+
+    struct aesd_buffer_entry *entry = aesd_circular_buffer_find_entry_offset_for_fpos(dev->circular_buffer, char_offset,
+        &entry_offset_byte);
+    if (entry == NULL)
+    {
+        newpos = -EINVAL;
+        goto out;
+    }
+
+    newpos = char_offset + entry_offset_byte;
+
+    filp->f_pos = newpos;
+
+out:
+    mutex_unlock(&dev->lock);
+
+    return newpos;
 }
 
 module_init(aesd_init_module);
