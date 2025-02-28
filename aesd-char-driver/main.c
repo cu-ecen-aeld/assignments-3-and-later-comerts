@@ -90,7 +90,7 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count, loff_t *f_p
     struct aesd_buffer_entry *entry = aesd_circular_buffer_find_entry_offset_for_fpos(dev->circular_buffer, *(size_t*)f_pos, &entry_offset_byte);
     if (entry == NULL)
     {
-        PDEBUG("entry is NULL");
+        PDEBUG("%s entry is NULL", __FUNCTION__);
         retval = 0;
         goto out;
     }
@@ -492,12 +492,17 @@ static long aesd_adjust_file_offset(struct file *filp, unsigned int write_cmd, u
 
     total_size = aesd_circular_buffer_size(dev->circular_buffer, write_cmd);
 
+    PDEBUG("total_size: %zu", total_size);
+
     char_offset = total_size + write_cmd_offset;
+
+    PDEBUG("char_offset: %zu", char_offset);
 
     struct aesd_buffer_entry *entry = aesd_circular_buffer_find_entry_offset_for_fpos(dev->circular_buffer, char_offset,
         &entry_offset_byte);
     if (entry == NULL)
     {
+        PDEBUG("%s entry is NULL", __FUNCTION__);
         newpos = -EINVAL;
         goto out;
     }
