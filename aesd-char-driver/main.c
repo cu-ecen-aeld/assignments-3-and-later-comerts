@@ -319,9 +319,9 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     {
         case AESDCHAR_IOCSEEKTO:
             struct aesd_seekto seekto;
-            if (copy_from_user(&seekto, (struct aesd_seekto*)arg, sizeof(struct aesd_seekto)))
+            if (copy_from_user(&seekto, (const void __user *)arg, sizeof(seekto)) != 0)
             {
-                return -EFAULT;
+                return EFAULT;
             }
             else
             {
