@@ -131,9 +131,9 @@ const size_t aesd_circular_buffer_size(struct aesd_circular_buffer *buffer, unsi
 {
     size_t total_size = 0;
 
-    if ((buffer->full) || (buffer->in_offs != buffer->out_offs))
+    if ((buffer->full) || (buffer->in_offs != buffer->out_offs) || (offset != buffer->out_offs))
     {
-        int i = buffer->out_offs;
+        int i = offset;
         do
         {
             total_size += buffer->entry[i].size;
