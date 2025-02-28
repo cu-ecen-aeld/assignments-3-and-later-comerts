@@ -13,6 +13,7 @@
 #else
 #include <string.h>
 #include <stdio.h>
+#include <linux/printk.h>
 #endif // __KERNEL__
 
 #include "aesd-circular-buffer.h"
