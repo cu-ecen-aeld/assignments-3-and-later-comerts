@@ -180,6 +180,7 @@ int handle_client(int *newsockfd, int *devfd)
     char *seek = strstr(buffer, SEEK_COMMAND);
     if (seek != NULL)
     {
+        syslog(LOG_INFO, "Seeking to offset");
         struct aesd_seekto seekto;
         seek += strlen(SEEK_COMMAND);
         char tmp_str[256];
@@ -196,6 +197,7 @@ int handle_client(int *newsockfd, int *devfd)
     }
     else
     {
+        syslog(LOG_INFO, "Writing to device");
         if (write(*devfd, buffer, strlen(buffer)) < 0)
         {
             perror("write");
