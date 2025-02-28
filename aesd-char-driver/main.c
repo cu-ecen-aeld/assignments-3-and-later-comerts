@@ -279,7 +279,7 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     int err = 0;
     int retval = 0;
 
-    PDEBUG("ioctl: cmd=%d, arg=%ld", cmd, arg);
+    PDEBUG("ioctl");
 
     /*
      * extract the type and number bitfields, and don't decode

@@ -37,15 +37,15 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
     struct aesd_buffer_entry *entry = NULL;
     size_t total_size = 0;
     
-    PDEBUG("Searching for entry at offset: %zu\r\n", char_offset);
-    PDEBUG("Buffer out offs: %d, Buffer in offs: %d\r\n", buffer->out_offs, buffer->in_offs);
-    PDEBUG("Buffer full: %d\r\n", buffer->full);
+    PDEBUG("Searching for entry at offset: %zu", char_offset);
+    PDEBUG("buffer->out_offs: %d, buffer->in_offs: %d", buffer->out_offs, buffer->in_offs);
+    PDEBUG("buffer->full: %d", buffer->full);
 
     bool buffer_empty = (buffer->in_offs == buffer->out_offs) && (buffer->full == false);
 
     if (buffer_empty)
     {
-        PDEBUG("Buffer is empty\r\n");
+        PDEBUG("Buffer is empty");
         return NULL;
     }
 
@@ -54,7 +54,7 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
     {
         total_size += buffer->entry[i].size;
 
-        PDEBUG("Total size: %zu\r\n", total_size);
+        PDEBUG("Total size: %zu", total_size);
 
         if(total_size > char_offset)
         {
@@ -90,19 +90,19 @@ const char *aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, 
 
         buffer->out_offs = (buffer->out_offs + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
 
-        PDEBUG("Buffer is full, overwriting oldest entry\r\n");
+        PDEBUG("Buffer is full, overwriting oldest entry");
     }
 
     buffer->entry[buffer->in_offs] = *add_entry;
     buffer->in_offs = (buffer->in_offs + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
     
-    PDEBUG("Added entry to buffer: %s\r\n", add_entry->buffptr);
+    PDEBUG("Added entry to buffer: %s", add_entry->buffptr);
 
     if (buffer->in_offs == buffer->out_offs)
     {
         buffer->full = true;
 
-        PDEBUG("Buffer is full\r\n");
+        PDEBUG("Buffer is full");
     }
 
     return overwritten_entry;
@@ -122,9 +122,9 @@ const size_t aesd_circular_buffer_size(struct aesd_circular_buffer *buffer, unsi
 
     if (((buffer->full) || (buffer->in_offs != buffer->out_offs)) && (offset != buffer->out_offs))
     {
-        PDEBUG("Buffer is full: %d\r\n", buffer->full);
-        PDEBUG("buffer->in_offs: %d\r\n", buffer->in_offs);
-        PDEBUG("buffer->out_offs: %d\r\n", buffer->out_offs);
+        PDEBUG("Buffer is full: %d", buffer->full);
+        PDEBUG("buffer->in_offs: %d", buffer->in_offs);
+        PDEBUG("buffer->out_offs: %d", buffer->out_offs);
         int i = offset;
         do
         {

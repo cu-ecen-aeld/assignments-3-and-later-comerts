@@ -204,9 +204,7 @@ int handle_client(int *newsockfd, int *devfd)
                     if (temp == NULL)
                     {
                         perror("realloc");
-                        free(buffer);
-                        ret = 1;
-                        break;
+                        goto out;
                     }
                     buffer = temp;
                 }
@@ -235,6 +233,7 @@ int handle_client(int *newsockfd, int *devfd)
         {
             perror("ioctl");
             ret = 1;
+            goto out;
         }
 
         ret = echo_buffer(ret, devfd, newsockfd);
@@ -246,11 +245,13 @@ int handle_client(int *newsockfd, int *devfd)
         {
             perror("write");
             ret = 1;
+            goto out;
         }
 
         ret = echo_buffer(ret, devfd, newsockfd);
     }
 
+out:
     free(buffer);
 
     return ret;
