@@ -235,6 +235,8 @@ loff_t aesd_llseek(struct file *filp, loff_t off, int whence)
     struct aesd_dev *dev = filp->private_data;
     loff_t newpos;
 
+    PDEBUG("llseek: offset=%lld, whence=%d", off, whence);
+
     if (mutex_lock_interruptible(&dev->lock))
     {
         PDEBUG("mutex_lock_interruptible failed");
@@ -276,6 +278,8 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
     int err = 0;
     int retval = 0;
+
+    PDEBUG("ioctl: cmd=%d, arg=%ld", cmd, arg);
 
     /*
      * extract the type and number bitfields, and don't decode

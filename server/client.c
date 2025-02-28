@@ -174,6 +174,7 @@ int handle_client(int *newsockfd, int *devfd)
     }
 
     printf("Here is the message: %s\r\n", buffer);
+    syslog(LOG_INFO, "Received: %s", buffer);
 
     /* check if AESDCHAR_IOCSEEKTO: */
     char *seek = strstr(buffer, SEEK_COMMAND);
