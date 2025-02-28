@@ -123,8 +123,9 @@ int handle_client(int *newsockfd, FILE *file)
 }
 #else //USE_AESD_CHAR_DEVICE
 
-int echo_buffer(int ret, int *devfd, int *newsockfd)
+int echo_buffer(int *devfd, int *newsockfd)
 {
+    int ret = 0;
     unsigned int rpos = 0;
     int rsize;
     char *fileBuffer = (char*)malloc(FSIZE);
@@ -151,12 +152,18 @@ int echo_buffer(int ret, int *devfd, int *newsockfd)
             rpos += rsize;
         }
     } while (rpos < FSIZE);
-    if (write(*newsockfd, fileBuffer, strlen(fileBuffer)) < 0)
+
+    if (rsize > 0)
     {
-        perror("ERROR writing to socket");
-        ret = 1;
+        if (write(*newsockfd, fileBuffer, strlen(fileBuffer)) < 0)
+        {
+            perror("ERROR writing to socket");
+            ret = 1;
+        }
     }
+
     free(fileBuffer);
+
     return ret;
 }
 
@@ -236,7 +243,7 @@ int handle_client(int *newsockfd, int *devfd)
             goto out;
         }
 
-        ret = echo_buffer(ret, devfd, newsockfd);
+        ret = echo_buffer(devfd, newsockfd);
     }
     else
     {
@@ -248,7 +255,7 @@ int handle_client(int *newsockfd, int *devfd)
             goto out;
         }
 
-        ret = echo_buffer(ret, devfd, newsockfd);
+        ret = echo_buffer(devfd, newsockfd);
     }
 
 out:
