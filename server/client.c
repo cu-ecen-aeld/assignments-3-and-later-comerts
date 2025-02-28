@@ -189,6 +189,7 @@ int handle_client(int *newsockfd, int *devfd)
         seek = strstr(seek, ",") + 1;
         strncpy(tmp_str, seek, strstr(seek, "\n") - seek);
         seekto.write_cmd_offset = atoi(tmp_str);
+        syslog(LOG_INFO, "Seeking to write_cmd: %d, write_cmd_offset: %d", seekto.write_cmd, seekto.write_cmd_offset);
         if (ioctl(*devfd, AESDCHAR_IOCSEEKTO, &seekto) < 0)
         {
             perror("ioctl");
