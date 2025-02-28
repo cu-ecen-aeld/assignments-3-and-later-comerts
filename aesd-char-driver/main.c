@@ -252,7 +252,7 @@ loff_t aesd_llseek(struct file *filp, loff_t off, int whence)
             newpos = filp->f_pos + off;
             break;
         case 2: /* SEEK_END */
-            newpos = (loff_t)aesd_circular_buffer_size(dev->circular_buffer, dev->circular_buffer->out_offs);
+            newpos = (loff_t)aesd_circular_buffer_size(dev->circular_buffer, dev->circular_buffer->in_offs);
             break;
         default: /* can't happen */
             newpos = -EINVAL;

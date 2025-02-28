@@ -125,12 +125,12 @@ const size_t aesd_circular_buffer_size(struct aesd_circular_buffer *buffer, unsi
         PDEBUG("Buffer is full: %d", buffer->full);
         PDEBUG("buffer->in_offs: %d", buffer->in_offs);
         PDEBUG("buffer->out_offs: %d", buffer->out_offs);
-        int i = offset;
+        int i = buffer->out_offs;
         do
         {
             total_size += buffer->entry[i].size;
             i = (i + 1) % AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
-        } while (i != buffer->in_offs);
+        } while (i != offset);
     }
 
     return total_size;
