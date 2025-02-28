@@ -287,11 +287,13 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
      */
     if (_IOC_TYPE(cmd) != AESD_IOC_MAGIC)
     {
+        PDEBUG("ioctl: _IOC_TYPE(cmd) != AESD_IOC_MAGIC");
         return -ENOTTY;
     }
 
     if (_IOC_NR(cmd) > AESDCHAR_IOC_MAXNR)
     {
+        PDEBUG("ioctl: _IOC_NR(cmd) > AESDCHAR_IOC_MAXNR");
         return -ENOTTY;
     }
 
@@ -304,10 +306,12 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     if (_IOC_DIR(cmd) & _IOC_READ)
     {
         err = !access_ok_wrapper(VERIFY_WRITE, (void __user *)arg, _IOC_SIZE(cmd));
+        PDEBUG("ioctl: _IOC_DIR(cmd) & _IOC_READ");
     }
     else if (_IOC_DIR(cmd) & _IOC_WRITE)
     {
         err =  !access_ok_wrapper(VERIFY_READ, (void __user *)arg, _IOC_SIZE(cmd));
+        PDEBUG("ioctl: _IOC_DIR(cmd) & _IOC_WRITE");
     }
 
     if (err)
@@ -325,6 +329,7 @@ long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
             }
             else
             {
+                PDEBUG("ioctl: AESDCHAR_IOCSEEKTO: write_cmd=%d, write_cmd_offset=%d", seekto.write_cmd, seekto.write_cmd_offset);
                 retval = aesd_adjust_file_offset(filp, seekto.write_cmd, seekto.write_cmd_offset);
             }
             break;
