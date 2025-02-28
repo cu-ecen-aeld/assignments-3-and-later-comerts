@@ -509,7 +509,7 @@ static long aesd_adjust_file_offset(struct file *filp, unsigned int write_cmd, u
 
     PDEBUG("entry_offset_byte: %zu", entry_offset_byte);
 
-    newpos = char_offset + entry_offset_byte;
+    newpos = total_size + entry_offset_byte;
 
     PDEBUG("newpos: %ld", newpos);
 
