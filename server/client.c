@@ -19,6 +19,8 @@
 
 #define DEVICE_SIZE (4096)
 #define SEEK_COMMAND ("AESDCHAR_IOCSEEKTO:")
+#define FSIZE (4096)
+
 
 #if USE_AESD_CHAR_DEVICE == 0
 int handle_client(int *newsockfd, FILE *file)
@@ -120,6 +122,44 @@ int handle_client(int *newsockfd, FILE *file)
     return ret;
 }
 #else //USE_AESD_CHAR_DEVICE
+
+int echo_buffer(int ret, int *devfd, int *newsockfd)
+{
+    unsigned int rpos = 0;
+    int rsize;
+    char *fileBuffer = (char*)malloc(FSIZE);
+
+    if (fileBuffer == NULL)
+    {
+        perror("malloc");
+        ret = 1;
+    }
+
+    do
+    {
+        if ((rsize = read(*devfd, &fileBuffer[rpos], FSIZE)) < 0)
+        {
+            perror("read");
+            ret = 1;
+        }
+        else if (rsize == 0)
+        {
+            break;
+        }
+        else
+        {
+            rpos += rsize;
+        }
+    } while (rpos < FSIZE);
+    if (write(*newsockfd, fileBuffer, strlen(fileBuffer)) < 0)
+    {
+        perror("ERROR writing to socket");
+        ret = 1;
+    }
+    free(fileBuffer);
+    return ret;
+}
+
 int handle_client(int *newsockfd, int *devfd)
 {
     int ret = 0;
@@ -129,6 +169,7 @@ int handle_client(int *newsockfd, int *devfd)
     int n = BUFSIZE;
     int size = BUFSIZE;
     int xbuf = 0;
+
     while (1)
     {
         n = read(*newsockfd, &buffer[xbuf], BUFSIZE - 1);
@@ -195,6 +236,8 @@ int handle_client(int *newsockfd, int *devfd)
             perror("ioctl");
             ret = 1;
         }
+
+        ret = echo_buffer(ret, devfd, newsockfd);
     }
     else
     {
@@ -205,43 +248,7 @@ int handle_client(int *newsockfd, int *devfd)
             ret = 1;
         }
 
-        const size_t FSIZE = 4096;
-
-        char *fileBuffer = (char *)malloc(FSIZE);
-        if (fileBuffer == NULL)
-        {
-            perror("malloc");
-            ret = 1;
-        }
-
-        unsigned int rpos = 0;
-        int rsize;
-
-        do
-        {
-            if ((rsize = read(*devfd, &fileBuffer[rpos], FSIZE)) < 0)
-            {
-                perror("read");
-                ret = 1;
-            }
-            else if (rsize == 0)
-            {
-                break;
-            }
-            else
-            {
-                rpos += rsize;
-            }
-        } while (rpos < FSIZE);
-
-
-        if (write(*newsockfd, fileBuffer, strlen(fileBuffer)) < 0)
-        {
-            perror("ERROR writing to socket");
-            ret = 1;
-        }
-
-        free(fileBuffer);
+        ret = echo_buffer(ret, devfd, newsockfd);
     }
 
     free(buffer);

@@ -453,7 +453,7 @@ void aesd_cleanup_module(void)
 }
 
 /**
- * Adjust the file offset (f_pos) parmeter of @param filp based on the location specified by
+ * Adjust the file offset (f_pos) parameter of @param filp based on the location specified by
  * @param write_cmd (the zero referenced command to locate)
  * and @param write_cmd_offset (the zero referenced offset into the command)
  * @return 0 if successful, negative if error occured:
