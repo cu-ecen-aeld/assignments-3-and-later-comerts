@@ -18,9 +18,9 @@
 #include "aesd-circular-buffer.h"
 
 // Optional: use these functions to add debug or error prints to your application
-#define DEBUG_LOG(msg,...)
+//#define DEBUG_LOG(msg,...)
 #ifdef __KERNEL__
-//#define DEBUG_LOG(msg,...) printk(KERN_DEBUG "threading: " msg "\n" , ##__VA_ARGS__)
+#define DEBUG_LOG(msg,...) printk(KERN_DEBUG "threading: " msg "\n" , ##__VA_ARGS__)
 #define ERROR_LOG(msg,...) printk(KERN_ERR "threading ERROR: " msg "\n" , ##__VA_ARGS__)
 #else
 #define DEBUG_LOG(msg,...)
@@ -131,8 +131,11 @@ const size_t aesd_circular_buffer_size(struct aesd_circular_buffer *buffer, unsi
 {
     size_t total_size = 0;
 
-    if ((buffer->full) || (buffer->in_offs != buffer->out_offs) || (offset != buffer->out_offs))
+    if (((buffer->full) || (buffer->in_offs != buffer->out_offs)) && (offset != buffer->out_offs))
     {
+        DEBUG_LOG("Buffer is full: %d\r\n", buffer->full);
+        DEBUG_LOG("buffer->in_offs: %d\r\n", buffer->in_offs);
+        DEBUG_LOG("buffer->out_offs: %d\r\n", buffer->out_offs);
         int i = offset;
         do
         {
