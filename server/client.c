@@ -145,6 +145,7 @@ int echo_buffer(int *devfd, int *newsockfd)
         }
         else if (rsize == 0)
         {
+            fileBuffer[rpos] = '\0';
             break;
         }
         else
@@ -153,13 +154,10 @@ int echo_buffer(int *devfd, int *newsockfd)
         }
     } while (rpos < FSIZE);
 
-    if (rsize > 0)
+    if (write(*newsockfd, fileBuffer, strlen(fileBuffer)) < 0)
     {
-        if (write(*newsockfd, fileBuffer, strlen(fileBuffer)) < 0)
-        {
-            perror("ERROR writing to socket");
-            ret = 1;
-        }
+        perror("ERROR writing to socket");
+        ret = 1;
     }
 
     free(fileBuffer);
